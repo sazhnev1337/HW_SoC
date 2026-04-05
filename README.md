@@ -259,5 +259,5 @@ while(1){
 
 Начиная с регистра `0x03` последовательно 4 байта - координаты X и Y, по 10 бит для каждой. `0x02` - регистр, хранящий число касаний. Используем его, 
 только когда число касаний не равнно нулю. В результате получаем в minicom:
-<video src="./media/Touchscreen.mp4" controls="controls" width="50%">
+<video src="https://github.com/sazhnev1337/HW_SoC/raw/refs/heads/main/media/Touchscreen.mp4" controls="controls" width="50%">
 </video>
