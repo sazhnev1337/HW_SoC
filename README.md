@@ -185,3 +185,79 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 uint32_t periods[] = {5400-1, 2700-1, 1350-1, 675-2, 338-1};
 uint8_t freq_index = 0;
 ```
+
+# ДЗ 3. printf. I2C.
+
+### printf
+Подключаем стандартную библиотеку ввода-вывода:
+```c
+/* USER CODE BEGIN Includes */
+#include <stdio.h>
+/* USER CODE END Includes */
+```
+Переопределяем внутреннюю функцию `printf`, отвечающую за вывод отформатированной строки.
+```c
+/* USER CODE BEGIN 0 */
+int _write(int file, char *ptr, int len)
+{
+    HAL_UART_Transmit(&huart1, (uint8_t*)ptr, len, HAL_MAX_DELAY);
+    return len;
+}
+/* USER CODE END 0 */
+```
+Теперь вывод поступает на модуль `UART1`, который в свою очередь через `STM32F103` поступает по USB в `/dev/ttyACM0`.
+Для просмотра содержимого используем утилиту `minicom`:
+```shell
+minicom -D /dev/ttyACM0 -b 115200
+```
+
+### I2C сканер
+Опрашиваем все устройства, подключенные к интерфейсу `I2C3`, предварительно инициализировав его через CUBE MX.
+```c
+uint8_t found = 0;
+for (uint8_t addr = 1; addr < 128; addr++) {
+    HAL_StatusTypeDef result = HAL_I2C_IsDeviceReady(&hi2c3, addr << 1, 2, 10);
+    if (result == HAL_OK)
+    {
+        printf("Found device at: 0x%02X\r\n", addr);
+        found++;
+    }
+}
+```
+Отвечать могут даже не инициализированные устройства, так как для такого взаимодействия не обязательно полное тактирование.
+Получаем:
+```shell
+Found device at: 0x1A
+```
+### Координата касания тачскрина по I2C
+Тачскрин имеет модуль `I2C` Его адрес на шине: `0x38`. Организуем простейший опрос координаты касания экрана.
+```c 
+uint8_t buf[4];
+uint8_t reg_xy_ts = 0x03;
+uint16_t x, y;
+
+uint8_t n_touch = 0;
+uint8_t reg_status = 0x02;
+
+while(1){ 
+  
+  HAL_I2C_Master_Transmit(&hi2c3, 0x38 << 1,  &reg_status, 1, 10);
+  HAL_I2C_Master_Receive (&hi2c3, 0x38 << 1,  &n_touch,    1, 10);
+
+  if (n_touch > 0)
+  {
+  HAL_I2C_Master_Transmit(&hi2c3, 0x38 << 1,  &reg_xy_ts, 1, 10);
+  HAL_I2C_Master_Receive (&hi2c3, 0x38 << 1,  buf,        4, 10);
+
+  x = (buf[0] & 0x0F) << 8 | buf[1];
+  y = (buf[2] & 0x0F) << 8 | buf[3];
+
+  printf("Touchscreen coordinate: x=%d,  y=%d\r\n", x, y);
+  }
+}
+```
+
+Начиная с регистра `0x03` последовательно 4 байта - координаты X и Y, по 10 бит для каждой. `0x02` - регистр, хранящий число касаний. Используем его, 
+только когда число касаний не равнно нулю. В результате получаем в minicom:
+<video src="./media/Touchscreen.mp4" controls="controls" width="50%">
+</video>
